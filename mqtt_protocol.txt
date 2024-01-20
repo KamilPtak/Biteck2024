@@ -1,0 +1,15 @@
+pi4 -> piPico:
+Topic:
+    pico/mot/hor
+zawartość:
+    angle(od -180 do 180), pozycja absolutna docelowa
+ 
+topic:
+    pico/mot/vert
+zawartość:
+    angle (od -45 do 45), pozycja absolutna docelowa
+    
+topic:
+    flask/debug/facePos
+zawartość
+    <notFound(0/1)>, <x>, <y>
