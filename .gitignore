@@ -1,0 +1,11 @@
+# Ignore tmp files
+*.swp
+*.swo
+*.swn
+
+# Ignore compiler generated files
+build/
+bin/
+
+# Ignore VS Code generated file
+.vscode/
