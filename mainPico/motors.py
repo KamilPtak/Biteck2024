@@ -23,6 +23,6 @@ def callback(topic, msg):
         print("Moving horizontally by ", steps)
         stepperH.run(steps)
     elif topic == b'pico/mot/vert':
-        pos = float(msg)
+        pos = 90-float(msg)
         print("Moving vertically to ", pos)
         servoV.move(pos)
