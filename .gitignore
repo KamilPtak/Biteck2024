@@ -9,3 +9,6 @@ bin/
 
 # Ignore VS Code generated file
 .vscode/
+
+#ingore secerts
+mySecrets.py
