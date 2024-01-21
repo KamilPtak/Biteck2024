@@ -15,6 +15,5 @@ d.set_version(3.3)
 def setLightsColor(rgb):
     d.set_colour(rgb['r'], rgb['g'], rgb['b'], False)
 
-
 def setLightOn(on=True):
     d.set_value(20, on)
