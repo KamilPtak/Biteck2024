@@ -158,60 +158,6 @@ clf_emo = joblib.load("./clf_emo")
 clf_a   = joblib.load("./clf_a")
 clf_b   = joblib.load("./clf_b")
 
-# def cielab_to_rgb(l, a, b):
-#     # (0-1)*3 -> (0, 255)*3
-#     # Convert L*, a*, b* to CIE XYZ
-#     a = (a+1)/2
-#     b = (b+1)/2
-
-#     y = (l + 16) / 116
-#     x = a / 500 + y
-#     z = y - b / 200
-
-#     # Adjust values based on standard illuminant D65
-#     x = 0.950456 * (x ** 3 if x ** 3 > 0.008856 else (x - 16 / 116) / 7.787)
-#     y = 1.000000 * (y ** 3 if y ** 3 > 0.008856 else (y - 16 / 116) / 7.787)
-#     z = 1.088754 * (z ** 3 if z ** 3 > 0.008856 else (z - 16 / 116) / 7.787)
-
-#     # Convert CIE XYZ to RGB
-#     r = max(0, min(1, 3.240479 * x - 1.537150 * y - 0.498535 * z))
-#     g = max(0, min(1, -0.969256 * x + 1.875992 * y + 0.041556 * z))
-#     b = max(0, min(1, 0.055648 * x - 0.204043 * y + 1.057311 * z))
-
-#     # Apply gamma correction
-#     r = 12.92 * r if r <= 0.04045 else 1.055 * r**(1 / 2.4) - 0.055
-#     g = 12.92 * g if g <= 0.04045 else 1.055 * g**(1 / 2.4) - 0.055
-#     b = 12.92 * b if b <= 0.04045 else 1.055 * b**(1 / 2.4) - 0.055
-
-#     return int(r * 255), int(g * 255), int(b * 255)
-
-def cielab_to_rgb(L, a, b):
-    # CIELAB to CIEXYZ
-    Y = (L + 16.0) / 116.0
-    X = a / 500.0 + Y
-    Z = Y - b / 200.0
-
-    Y = Y ** 3 if Y ** 3 <= 0.008856 else Y
-    X = X ** 3 if X ** 3 <= 0.008856 else X
-    Z = Z ** 3 if Z ** 3 <= 0.008856 else Z
-
-    X *= 0.950456
-    Y *= 1.0
-    Z *= 1.088754
-
-    # CIEXYZ to RGB
-    xyz_to_rgb_matrix = np.array([[3.240479, -1.537150, -0.498535],
-                                  [-0.969256, 1.875992, 0.041556],
-                                  [0.055648, -0.204043, 1.057311]])
-
-    xyz = np.array([X, Y, Z])
-    rgb = np.dot(xyz_to_rgb_matrix, xyz)
-
-    # Clip and scale to the [0, 255] range
-    rgb = np.clip(rgb * 255, 0, 255).astype(np.uint8)
-
-    return tuple(rgb)
-
 class FacePursue(Thread):
     res = res_global
     fov = fov_global
