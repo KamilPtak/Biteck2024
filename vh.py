@@ -307,7 +307,7 @@ def feed_stats_cont():
         for io, eo in enumerate(fpur_t.emo.flatten()):
             frame[0:int(eo*sh), int(io*sw):int((io+.9)*sw)] = 255
         for io, eo in enumerate(fpur_t.rgb):
-            frame[0:int(eo*sh), (sw*7)+int(io*sw):(sw*7)+int((io+.9)*sw)] = fpur_t.rgb
+            frame[0:int(eo*sh), (sw*7)+int(io*sw):(sw*7)+int((io+.9)*sw)] = fpur_t.rgb[::-1]
         # print("\n\n\n", fpur_t.rgb, "\n\n\n")
 
     # for _ in vcap_t.sync_frame(sub_id=1, skip_factor=ppur_t.skip_frame_f):
