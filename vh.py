@@ -8,6 +8,7 @@ import json
 import dlib
 from imutils import face_utils 
 import joblib
+import colorSender
 
 res_global = (240, 320) #?
 fov_global = 90
@@ -102,7 +103,7 @@ def face_detector(f_gray):
     rects_dlib = dlib_det(f_gray, 1)
     # rects_dmsc_l = [dmsc_det_l[di].detectMultiScale(f_gray, **dmsc_det_params) for di in range(dmsc_det_n)]
     rects = rects_dlib
-    print("face_detector debug #rects:", rects.__len__())
+    print("f:rects:", rects.__len__(), end=";")
 
     if      rects.__len__() == 1:   rect = rects[0]
     elif    rects.__len__() == 0:   rect = None
@@ -152,6 +153,65 @@ def load_im(f_gray):
         f_marked, rect,     
     )
 
+clf_emo = joblib.load("./clf_emo")
+
+clf_a   = joblib.load("./clf_a")
+clf_b   = joblib.load("./clf_b")
+
+# def cielab_to_rgb(l, a, b):
+#     # (0-1)*3 -> (0, 255)*3
+#     # Convert L*, a*, b* to CIE XYZ
+#     a = (a+1)/2
+#     b = (b+1)/2
+
+#     y = (l + 16) / 116
+#     x = a / 500 + y
+#     z = y - b / 200
+
+#     # Adjust values based on standard illuminant D65
+#     x = 0.950456 * (x ** 3 if x ** 3 > 0.008856 else (x - 16 / 116) / 7.787)
+#     y = 1.000000 * (y ** 3 if y ** 3 > 0.008856 else (y - 16 / 116) / 7.787)
+#     z = 1.088754 * (z ** 3 if z ** 3 > 0.008856 else (z - 16 / 116) / 7.787)
+
+#     # Convert CIE XYZ to RGB
+#     r = max(0, min(1, 3.240479 * x - 1.537150 * y - 0.498535 * z))
+#     g = max(0, min(1, -0.969256 * x + 1.875992 * y + 0.041556 * z))
+#     b = max(0, min(1, 0.055648 * x - 0.204043 * y + 1.057311 * z))
+
+#     # Apply gamma correction
+#     r = 12.92 * r if r <= 0.04045 else 1.055 * r**(1 / 2.4) - 0.055
+#     g = 12.92 * g if g <= 0.04045 else 1.055 * g**(1 / 2.4) - 0.055
+#     b = 12.92 * b if b <= 0.04045 else 1.055 * b**(1 / 2.4) - 0.055
+
+#     return int(r * 255), int(g * 255), int(b * 255)
+
+def cielab_to_rgb(L, a, b):
+    # CIELAB to CIEXYZ
+    Y = (L + 16.0) / 116.0
+    X = a / 500.0 + Y
+    Z = Y - b / 200.0
+
+    Y = Y ** 3 if Y ** 3 <= 0.008856 else Y
+    X = X ** 3 if X ** 3 <= 0.008856 else X
+    Z = Z ** 3 if Z ** 3 <= 0.008856 else Z
+
+    X *= 0.950456
+    Y *= 1.0
+    Z *= 1.088754
+
+    # CIEXYZ to RGB
+    xyz_to_rgb_matrix = np.array([[3.240479, -1.537150, -0.498535],
+                                  [-0.969256, 1.875992, 0.041556],
+                                  [0.055648, -0.204043, 1.057311]])
+
+    xyz = np.array([X, Y, Z])
+    rgb = np.dot(xyz_to_rgb_matrix, xyz)
+
+    # Clip and scale to the [0, 255] range
+    rgb = np.clip(rgb * 255, 0, 255).astype(np.uint8)
+
+    return tuple(rgb)
+
 class FacePursue(Thread):
     res = res_global
     fov = fov_global
@@ -176,6 +236,9 @@ class FacePursue(Thread):
         self.horz = 0
         self.vert = 0
 
+        self.emo = np.asarray([0,] *7)
+        self.rgb = (0,) *3
+
     @staticmethod
     def draw_rectangle(img, x, y, w, h, c, t):
         img[y:(y+h), (x+(w//2)-t):(x+(w//2)+t)] = c
@@ -183,7 +246,7 @@ class FacePursue(Thread):
 
     def _send_steering(self):
         if self.ff:
-            adj = -self.fov * self.cc_normd * .06
+            adj = -self.fov * self.cc_normd * .11 # pid
             new_horz = int(np.clip(self.horz+adj[1], -180, 180))
             new_vert = int(np.clip(self.vert+adj[0], -45, 45))
 
@@ -200,7 +263,7 @@ class FacePursue(Thread):
                 frame = vcap_t.frame
                 f_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
             except Exception as ee:
-                print("facepursue: ramka nie łapnięta" + str(ee))
+                print("fp:ramka" + str(ee))
                 self.ff = False
                 continue
             
@@ -208,7 +271,7 @@ class FacePursue(Thread):
             im_params = load_im(f_gray)
             if im_params is None:
                 self.ff = False
-                print("facepursue: ryjek nie znaleziony")
+                print("fp:face", end=";")
                 continue
 
             (
@@ -219,7 +282,7 @@ class FacePursue(Thread):
                 f_marked, rect,     
             ) = im_params
 
-            print("facepursue: ok")
+            print("fp:ok", end=";")
             self.ff = True
             self.cc = rect_cc
             self.bb = rect_bb
@@ -228,6 +291,24 @@ class FacePursue(Thread):
             
             self._send_steering()
             self.frame_enc = vcap_t.enc_frame(f_gray, self.dummy_frame)
+
+            ## fn 
+            emo = clf_emo.predict_proba([marks_normd.flatten()])
+            self.emo = emo
+            print("\nmood values:", 
+                  {k: v for v, k in zip(emo[0], ['anger', 'disgust', 'fear', 'happy', 'sadness', 'surprise', "neutral"])}, end=";")
+
+            lab = (1, float(clf_a.predict(emo)[0]), float(clf_b.predict(emo)[0]))
+            pixel = np.asarray([[(lab[0]*255, (lab[1]+1)*127, (lab[2]+1)*127)]], dtype=np.uint8)
+            # print("pixel", pixel, pixel.dtype)
+            rgb = cv2.cvtColor(pixel,  cv2.COLOR_Lab2BGR)
+            # print("rgb", rgb, rgb.dtype)
+            rgb = rgb[0,0]
+            self.rgb = rgb
+            print("mood color lab:", lab, "; rgb:", rgb)
+
+            colorSender.setLightsColor(rgb)
+
             
 fpur_t = FacePursue()
 
@@ -272,6 +353,28 @@ app.config.from_mapping(
     **MA_CONFIG
 )
 
+sw = 20
+sh = 200
+def feed_stats_cont():
+    for _ in vcap_t.sync_frame(sub_id=1, skip_factor=0):
+        frame = np.zeros((sh, sw*10, 3), dtype=np.uint8)
+        for io, eo in enumerate(fpur_t.emo.flatten()):
+            frame[0:int(eo*sh), int(io*sw):int((io+.9)*sw)] = 255
+        for io, eo in enumerate(fpur_t.rgb):
+            frame[0:int(eo*sh), (sw*7)+int(io*sw):(sw*7)+int((io+.9)*sw)] = fpur_t.rgb
+        # print("\n\n\n", fpur_t.rgb, "\n\n\n")
+
+    # for _ in vcap_t.sync_frame(sub_id=1, skip_factor=ppur_t.skip_frame_f):
+    #     frame = ppur_t.frame_enc #dg
+        frame = vcap_t.enc_frame(frame[::-1], None)
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+
+@app.route('/stats_feed')
+def stats_feed():
+    return Response(feed_stats_cont(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
 def feed_frame_cont():
     for _ in vcap_t.sync_frame(sub_id=1, skip_factor=0):
         frame = vcap_t.frame
@@ -289,7 +392,7 @@ def feed_frame_cont():
                 #     frame, *ppur_t.bb, 
                 # ppur_t.bb_color, ppur_t.bb_thick)
             except Exception as ee: 
-                print("facepursue: nie narysowało ramki" + str(ee))
+                print("fp:-ramka" + str(ee))
                 pass
 
     # for _ in vcap_t.sync_frame(sub_id=1, skip_factor=ppur_t.skip_frame_f):
@@ -302,6 +405,7 @@ def feed_frame_cont():
 def video_feed():
     return Response(feed_frame_cont(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
+
 
 def feed_frame_single():
     frame = vcap_t.frame
